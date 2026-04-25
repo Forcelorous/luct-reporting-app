@@ -1,0 +1,195 @@
+import React, { useState } from 'react';
+import {
+  View, Text, StyleSheet, Alert,
+  ActivityIndicator, TouchableOpacity,
+  Image, KeyboardAvoidingView, Platform,
+  ScrollView, ImageBackground
+} from 'react-native';
+
+import { auth } from '../../services/FirebaseConfig';
+import Input from '../../components/Input';
+import CustomButton from '../../components/CustomButtons';
+
+export default function Login({ navigation }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async () => {
+  const trimmedEmail = email.trim();
+
+  if (!trimmedEmail || !password) {
+    Alert.alert('Error', 'Please enter your email and password.');
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    await auth.signInWithEmailAndPassword(trimmedEmail, password);
+  } catch (error) {
+    Alert.alert('Login Error', error.message);
+  } finally {
+    setLoading(false);
+  }
+};
+
+  return (
+    <ImageBackground
+      source={require('../../../assets/background.jpg')}
+      style={styles.background}
+      resizeMode="cover"
+    >
+      <View style={styles.overlay} />
+
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.logoSection}>
+            <Image
+              source={require('../../../assets/limkoicon.jpg')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <View style={styles.dividerLine} />
+            <Text style={styles.tagline}>LUCT Reporting System</Text>
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Sign In</Text>
+            <Text style={styles.cardSubtitle}>
+              Enter your credentials to continue
+            </Text>
+
+            <Input
+              label="Email:"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+
+            <Input
+              label="Password:"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+
+            {loading ? (
+              <ActivityIndicator
+                size="large"
+                color="#c9a84c"
+                style={{ marginTop: 20 }}
+              />
+            ) : (
+              <CustomButton title="Sign In" onPress={handleLogin} />
+            )}
+          </View>
+
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Register')}
+            style={styles.footer}
+          >
+            <Text style={styles.footerText}>
+              Don't have an account?{' '}
+              <Text style={styles.footerLink}>Register here</Text>
+            </Text>
+          </TouchableOpacity>
+
+          <Text style={styles.copyright}>
+            © Limkokwing University of Creative Technology
+          </Text>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </ImageBackground>
+  );
+}
+
+const styles = StyleSheet.create({
+  background: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+  },
+  flex: { flex: 1 },
+  container: {
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 48,
+  },
+  logoSection: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  logo: {
+    width: 180,
+    height: 140,
+    borderRadius: 100,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  dividerLine: {
+    width: 60,
+    height: 1.5,
+    backgroundColor: '#c9a84c',
+    marginBottom: 12,
+  },
+  tagline: {
+    fontSize: 12,
+    color: '#c9a84c',
+    letterSpacing: 2.5,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  card: {
+    width: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    borderRadius: 18,
+    padding: 24,
+    borderWidth: 1.5,
+    borderColor: '#c9a84c',
+    elevation: 8,
+    marginBottom: 24,
+  },
+  cardTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#c9a84c',
+    marginBottom: 4,
+  },
+  cardSubtitle: {
+    fontSize: 13,
+    color: '#aaaaaa',
+    marginBottom: 20,
+  },
+  footer: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  footerText: {
+    color: '#cccccc',
+    fontSize: 14,
+  },
+  footerLink: {
+    color: '#c9a84c',
+    fontWeight: '700',
+  },
+  copyright: {
+    fontSize: 11,
+    color: '#888888',
+    textAlign: 'center',
+  },
+});
