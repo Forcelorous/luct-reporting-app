@@ -63,30 +63,39 @@ const TAB_CONFIG = {
   ],
 };
 
+import { Platform } from 'react-native';
+
 const LogoutButton = () => (
   <TouchableOpacity
-    onPress={() =>
-      Alert.alert('Logout', 'Are you sure you want to logout?', [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await auth.signOut();
-            } catch (error) {
-              Alert.alert('Error', 'Failed to logout. Please try again.');
-            }
+    onPress={async () => {
+      if (Platform.OS === 'web') {
+        try {
+          await auth.signOut();
+        } catch (error) {
+          console.error('Logout error:', error);
+        }
+      } else {
+        Alert.alert('Logout', 'Are you sure you want to logout?', [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Logout',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await auth.signOut();
+              } catch (error) {
+                Alert.alert('Error', 'Failed to logout. Please try again.');
+              }
+            },
           },
-        },
-      ])
-    }
+        ]);
+      }
+    }}
     style={{ marginRight: 16 }}
   >
     <Ionicons name="log-out-outline" size={22} color="#ef4444" />
   </TouchableOpacity>
 );
-
 export default function RoleBasedTabs({ role }) {
   const tabs = TAB_CONFIG[role] || TAB_CONFIG['Student'];
 
