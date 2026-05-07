@@ -1,22 +1,36 @@
-import firebase from 'firebase/compat/app';
-import 'firebase/compat/auth';
-import 'firebase/compat/firestore';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeAuth, getAuth, getReactNativePersistence } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
-   apiKey: process.env.EXPO_PUBLIC_API_KEY,
-  authDomain: process.env.EXPO_PUBLIC_AUTH_DOMAIN,
-  projectId: process.env.EXPO_PUBLIC_PROJECT_ID,
-  storageBucket: process.env.EXPO_PUBLIC_STORAGE_BUCKET,
-  messagingSenderId: process.env.EXPO_PUBLIC_MESSAGING_SENDER_ID,
-  appId: process.env.EXPO_PUBLIC_APP_ID,
+  apiKey: "AIzaSyDY3fNyri2zNW-fVvbjvtV3sDJx6LdLjBo",
+  authDomain: "luct-reporting-app-cb106.firebaseapp.com",
+  projectId: "luct-reporting-app-cb106",
+  storageBucket: "luct-reporting-app-cb106.firebasestorage.app",
+  messagingSenderId: "475408059518",
+  appId: "1:475408059518:web:75686477a04e4cf6969c2f",
+  measurementId: "G-P7Z0JMF59K"
+};
+
+// ✅ Only initialize app once
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+
+// ✅ Only initialize auth once
+let auth;
+try {
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage)
+  });
+} catch (e) {
+  // Already initialized — just get the existing instance
+  auth = getAuth(app);
 }
- 
 
-if (!firebase.apps.length) {
-  firebase.initializeApp(firebaseConfig);
-}
+// ✅ Firestore
+export const db = getFirestore(app);
 
-const auth = firebase.auth();
-const firestore = firebase.firestore();
+// ✅ Export both db and firestore so all files work
+export const firestore = db;
 
-export { auth, firestore, firebase };
+export { auth };

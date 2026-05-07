@@ -1,20 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
-import { firestore } from '../../services/FirebaseConfig';
+import { getAllReports } from '../../services/api';
 
 export default function PLClasses() {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = firestore.collection('reports')
-      .orderBy('createdAt', 'desc')
-      .onSnapshot(snapshot => {
-        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setReports(data);
-        setLoading(false);
-      });
-    return unsubscribe;
+    let mounted = true;
+    const fetchReports = async () => {
+      try {
+        const data = await getAllReports();
+        if (mounted) setReports(data);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    fetchReports();
+    return () => { mounted = false; };
   }, []);
 
   if (loading) return <ActivityIndicator size="large" color="#15ff00" style={styles.loader} />;

@@ -1,21 +1,59 @@
 const { db } = require('../services/firebase');
 
-//  get all courses
+// get all courses — joins with assignments so assignedLecturer is included
 const getAllCourses = async (req, res) => {
   try {
-    const snapshot = await db.collection('courses').get();
-    const courses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const [coursesSnap, assignmentsSnap] = await Promise.all([
+      db.collection('courses').get(),
+      db.collection('assignments').get(),
+    ]);
+
+    const assignments = {};
+    assignmentsSnap.docs.forEach(doc => {
+      const data = doc.data();
+      // key by courseCode so we can look up quickly
+      assignments[data.courseCode] = {
+        lecturerName: data.lecturerName,
+        lecturerEmail: data.lecturerEmail,
+        uid: data.lecturerUid || '',
+      };
+    });
+
+    const courses = coursesSnap.docs.map(doc => {
+      const data = doc.data();
+      const assigned = assignments[data.courseCode] || null;
+      return {
+        id: doc.id,
+        ...data,
+        // ✅ attach assignedLecturer so frontend filter works
+        assignedLecturer: assigned ? {
+          name: assigned.lecturerName,
+          email: assigned.lecturerEmail,
+          uid: assigned.uid,
+        } : null,
+      };
+    });
+
     res.json(courses);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
 
-//  add a course (PL only)
+// add a course (PL only)
 const addCourse = async (req, res) => {
   try {
-    const { courseCode, courseName, stream } = req.body;
-    const course = { courseCode, courseName, stream: stream || '', createdAt: new Date() };
+    const { courseCode, courseName, stream, faculty, totalStudents, scheduledTime, venue } = req.body;
+    const course = {
+      courseCode,
+      courseName,
+      stream: stream || '',
+      faculty: faculty || '',
+      totalStudents: totalStudents || '',
+      scheduledTime: scheduledTime || '',
+      venue: venue || '',
+      createdAt: new Date(),
+    };
     const docRef = await db.collection('courses').add(course);
     res.status(201).json({ id: docRef.id, ...course });
   } catch (error) {
@@ -33,7 +71,7 @@ const deleteCourse = async (req, res) => {
   }
 };
 
-//  get all assignments
+// get all assignments
 const getAllAssignments = async (req, res) => {
   try {
     const snapshot = await db.collection('assignments').orderBy('assignedAt', 'desc').get();
@@ -56,10 +94,10 @@ const getAssignmentsByLecturer = async (req, res) => {
   }
 };
 
-//  assign lecturer to course
+// assign lecturer to course
 const assignLecturer = async (req, res) => {
   try {
-    const { lecturerEmail, lecturerName, courseCode } = req.body;
+    const { lecturerEmail, lecturerName, courseCode, lecturerUid } = req.body;
 
     // Check duplicate
     const existing = await db.collection('assignments')
@@ -71,7 +109,10 @@ const assignLecturer = async (req, res) => {
     }
 
     const assignment = {
-      lecturerEmail, lecturerName, courseCode,
+      lecturerEmail,
+      lecturerName,
+      lecturerUid: lecturerUid || '',
+      courseCode,
       assignedAt: new Date(),
     };
     const docRef = await db.collection('assignments').add(assignment);

@@ -1,6 +1,6 @@
 const { db } = require('../services/firebase');
 
-//  get all sessions
+// get all sessions
 const getAllSessions = async (req, res) => {
   try {
     const snapshot = await db.collection('attendanceSessions')
@@ -8,11 +8,12 @@ const getAllSessions = async (req, res) => {
     const sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     res.json(sessions);
   } catch (error) {
+    console.error('getAllSessions error:', error.message);
     res.status(500).json({ error: error.message });
   }
 };
 
-//  get open sessions
+// get open sessions
 const getOpenSessions = async (req, res) => {
   try {
     const snapshot = await db.collection('attendanceSessions')
@@ -20,6 +21,7 @@ const getOpenSessions = async (req, res) => {
     const sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     res.json(sessions);
   } catch (error) {
+    console.error('getOpenSessions error:', error.message);
     res.status(500).json({ error: error.message });
   }
 };
@@ -29,28 +31,32 @@ const getSessionsByLecturer = async (req, res) => {
   try {
     const snapshot = await db.collection('attendanceSessions')
       .where('lecturerEmail', '==', req.params.email).get();
-    const sessions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    const sessions = snapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
       .sort((a, b) => b.createdAt?.toDate?.() - a.createdAt?.toDate?.());
     res.json(sessions);
   } catch (error) {
+    console.error('getSessionsByLecturer error:', error.message);
     res.status(500).json({ error: error.message });
   }
 };
 
-//  get student attendance records
+// get student attendance records
 const getStudentAttendance = async (req, res) => {
   try {
     const snapshot = await db.collection('studentAttendance')
       .where('studentId', '==', req.params.studentId).get();
-    const records = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    const records = snapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
       .sort((a, b) => b.createdAt?.toDate?.() - a.createdAt?.toDate?.());
     res.json(records);
   } catch (error) {
+    console.error('getStudentAttendance error:', error.message);
     res.status(500).json({ error: error.message });
   }
 };
 
-//  get check-ins for a session
+// get check-ins for a session
 const getSessionCheckIns = async (req, res) => {
   try {
     const snapshot = await db.collection('studentAttendance')
@@ -58,14 +64,21 @@ const getSessionCheckIns = async (req, res) => {
     const checkIns = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     res.json(checkIns);
   } catch (error) {
+    console.error('getSessionCheckIns error:', error.message);
     res.status(500).json({ error: error.message });
   }
 };
 
-//  open a new session
+// open a new session
 const openSession = async (req, res) => {
   try {
     const { courseCode, lecturerEmail, lecturerName, date, venue } = req.body;
+
+    // ✅ Validate required fields
+    if (!courseCode || !lecturerEmail || !lecturerName || !date) {
+      return res.status(400).json({ error: 'Missing required fields: courseCode, lecturerEmail, lecturerName, date' });
+    }
+
     const session = {
       courseCode, lecturerEmail, lecturerName,
       date, venue: venue || '',
@@ -76,34 +89,77 @@ const openSession = async (req, res) => {
     const docRef = await db.collection('attendanceSessions').add(session);
     res.status(201).json({ id: docRef.id, ...session });
   } catch (error) {
+    console.error('openSession error:', error.message);
     res.status(500).json({ error: error.message });
   }
 };
 
-//  close a session
+// close a session
 const closeSession = async (req, res) => {
   try {
+    const { id } = req.params;
     const { presentCount, absentCount, totalStudents } = req.body;
-    await db.collection('attendanceSessions').doc(req.params.id).update({
+
+    // ✅ Debug — remove once confirmed working
+    console.log('closeSession called — ID:', id);
+    console.log('closeSession body:', req.body);
+
+    // ✅ Validate session ID
+    if (!id) {
+      return res.status(400).json({ error: 'Missing session ID' });
+    }
+
+    // ✅ Check the session actually exists before updating
+    const sessionRef = db.collection('attendanceSessions').doc(id);
+    const sessionSnap = await sessionRef.get();
+
+    if (!sessionSnap.exists) {
+      console.error('closeSession: session not found —', id);
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // ✅ Check it isn't already closed
+    if (!sessionSnap.data().isOpen) {
+      return res.status(409).json({ error: 'Session is already closed' });
+    }
+
+    // ✅ Safe defaults so Firestore update never gets undefined values
+    await sessionRef.update({
       isOpen: false,
-      presentCount,
-      absentCount,
-      totalStudents,
+      presentCount: presentCount ?? 0,
+      absentCount: absentCount ?? 0,
+      totalStudents: totalStudents ?? 0,
       closedAt: new Date(),
     });
+
     res.json({ message: 'Session closed successfully' });
   } catch (error) {
+    console.error('closeSession error:', error.code, error.message);
     res.status(500).json({ error: error.message });
   }
 };
 
-//  student signs in
+// student signs in
 const studentCheckIn = async (req, res) => {
   try {
     const {
       sessionId, studentId, studentEmail, studentName,
       courseCode, lecturerEmail, date, venue,
     } = req.body;
+
+    // ✅ Validate required fields
+    if (!sessionId || !studentId || !studentEmail) {
+      return res.status(400).json({ error: 'Missing required fields: sessionId, studentId, studentEmail' });
+    }
+
+    // ✅ Confirm session exists and is still open
+    const sessionSnap = await db.collection('attendanceSessions').doc(sessionId).get();
+    if (!sessionSnap.exists) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    if (!sessionSnap.data().isOpen) {
+      return res.status(409).json({ error: 'Session is already closed' });
+    }
 
     // Prevent duplicate check-in
     const existing = await db.collection('studentAttendance')
@@ -122,6 +178,7 @@ const studentCheckIn = async (req, res) => {
     const docRef = await db.collection('studentAttendance').add(record);
     res.status(201).json({ id: docRef.id, ...record });
   } catch (error) {
+    console.error('studentCheckIn error:', error.message);
     res.status(500).json({ error: error.message });
   }
 };

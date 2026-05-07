@@ -6,8 +6,7 @@ const {
 } = require('../controllers/coursesController');
 const { verifyToken } = require('../services/authMiddleware');
 
-// Courses
-router.get('/', verifyToken, getAllCourses);
+router.get('/', getAllCourses);
 router.post('/', verifyToken, addCourse);
 router.delete('/:id', verifyToken, deleteCourse);
 

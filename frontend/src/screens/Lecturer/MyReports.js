@@ -4,32 +4,39 @@ import {
   ActivityIndicator, TouchableOpacity, TextInput, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { auth, firestore } from '../../services/FirebaseConfig';
+import { auth } from '../../services/FirebaseConfig';
+import { getReportsByLecturer } from '../../services/api';
 import { exportToCSV } from '../../utils/ExcelExport';
 
-export default function MyReports() {
+export default function MyReports({ navigation }) {
   const [reports, setReports] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState({});
-  const [currentUser, setCurrentUser] = useState(null);
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(user => {
-      if (user) {
-        setCurrentUser(user);
-        loadReports(user);
-      } else {
-        setLoading(false);
-      }
+    const unsubscribe = auth.onAuthStateChanged((currentUser) => {
+      setUser(currentUser);
     });
-    return unsubscribe;
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
-    if (!search.trim()) { setFiltered(reports); return; }
+    if (user) {
+      loadReports();
+    } else {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (!search.trim()) { 
+      setFiltered(reports); 
+      return; 
+    }
     const q = search.toLowerCase();
     setFiltered(reports.filter(r =>
       r.courseCode?.toLowerCase().includes(q) ||
@@ -41,33 +48,22 @@ export default function MyReports() {
     ));
   }, [search, reports]);
 
-  const loadReports = async (user) => {
+  const loadReports = async () => {
+    if (!user || !user.email) {
+      setReports([]);
+      setFiltered([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
-      const snap1 = await firestore.collection('reports')
-        .where('lecturerEmail', '==', user.email).get();
-      const byEmail = snap1.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-      const snap2 = await firestore.collection('reports')
-        .where('lecturerUID', '==', user.uid).get();
-      const byUID = snap2.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-      const merged = [...byEmail];
-      byUID.forEach(r => {
-        if (!merged.find(m => m.id === r.id)) merged.push(r);
-      });
-
-      const sorted = merged.sort((a, b) => {
-        const aT = a.createdAt?.seconds || 0;
-        const bT = b.createdAt?.seconds || 0;
-        return bT - aT;
-      });
-
-      setReports(sorted);
-      setFiltered(sorted);
+      const data = await getReportsByLecturer(user.email);
+      setReports(data);
+      setFiltered(data);
     } catch (error) {
       console.error('loadReports error:', error);
-      Alert.alert('Error', 'Failed to load reports. Please try again.');
+      Alert.alert('Error', 'Failed to load reports.');
     } finally {
       setLoading(false);
     }
@@ -81,9 +77,7 @@ export default function MyReports() {
     setExporting(true);
     try {
       const result = await exportToCSV(reports, 'my_reports.csv');
-      if (result && !result.success) {
-        Alert.alert('Export Failed', result.error);
-      }
+      if (result && !result.success) Alert.alert('Export Failed', result.error);
     } catch (error) {
       Alert.alert('Export Failed', error.message);
     } finally {
@@ -94,22 +88,18 @@ export default function MyReports() {
   const toggleExpand = (id) =>
     setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
 
-  const handleRefresh = () => {
-    if (currentUser) loadReports(currentUser);
-  };
-
   if (loading) {
     return (
-      <View style={styles.loaderContainer}>
-        <ActivityIndicator size="large" color="#1a56db" />
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#000000" />
         <Text style={styles.loaderText}>Loading your reports...</Text>
       </View>
     );
   }
 
-  if (!currentUser) {
+  if (!user) {
     return (
-      <View style={styles.loaderContainer}>
+      <View style={styles.center}>
         <Ionicons name="lock-closed-outline" size={48} color="#d1d5db" />
         <Text style={styles.loaderText}>Please log in to view your reports.</Text>
       </View>
@@ -118,10 +108,9 @@ export default function MyReports() {
 
   return (
     <View style={styles.container}>
-
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.refreshBtn} onPress={handleRefresh}>
-          <Ionicons name="refresh-outline" size={18} color="#1a56db" />
+        <TouchableOpacity style={styles.refreshBtn} onPress={loadReports}>
+          <Ionicons name="refresh-outline" size={18} color="#000000" />
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.exportBtn, exporting && styles.exportBtnDisabled]}
@@ -129,16 +118,16 @@ export default function MyReports() {
           disabled={exporting}
         >
           {exporting ? (
-            <ActivityIndicator size="small" color="#1a56db" />
+            <ActivityIndicator size="small" color="#000000" />
           ) : (
             <>
-              <Ionicons name="download-outline" size={16} color="#1a56db" />
+              <Ionicons name="download-outline" size={16} color="#000000" />
               <Text style={styles.exportText}>Export CSV</Text>
             </>
           )}
         </TouchableOpacity>
       </View>
-      
+
       <View style={styles.searchWrapper}>
         <Ionicons name="search-outline" size={16} color="#9ca3af" style={styles.searchIcon} />
         <TextInput
@@ -170,9 +159,7 @@ export default function MyReports() {
               {search ? 'No matching reports' : 'No reports submitted yet'}
             </Text>
             <Text style={styles.emptySub}>
-              {search
-                ? 'Try a different search term.'
-                : 'Submit your first report using the Report tab.'}
+              {search ? 'Try a different search term.' : 'Submit your first report using the Report tab.'}
             </Text>
           </View>
         }
@@ -235,19 +222,17 @@ export default function MyReports() {
 
               {isOpen && (
                 <View style={styles.details}>
-                  <Detail label="Faculty"           value={item.facultyName} />
-                  <Detail label="Class"             value={item.className} />
-                  <Detail label="Venue"             value={item.venue} />
-                  <Detail label="Scheduled Time"    value={item.scheduledTime} />
-                  <Detail label="Students Present"  value={`${present} / ${total}`} />
-                  <Detail label="Topic Taught"      value={item.topicTaught} />
+                  <Detail label="Faculty" value={item.facultyName} />
+                  <Detail label="Class" value={item.className} />
+                  <Detail label="Venue" value={item.venue} />
+                  <Detail label="Scheduled Time" value={item.scheduledTime} />
+                  <Detail label="Students Present" value={`${present} / ${total}`} />
+                  <Detail label="Topic Taught" value={item.topicTaught} />
                   <Detail label="Learning Outcomes" value={item.learningOutcomes} />
-                  {item.recommendations
-                    ? <Detail label="Recommendations" value={item.recommendations} />
-                    : null}
+                  {item.recommendations ? <Detail label="Recommendations" value={item.recommendations} /> : null}
                   {item.feedback && (
                     <View style={styles.feedbackBox}>
-                      <Text style={styles.feedbackLabel}>💬 PRL Feedback</Text>
+                      <Text style={styles.feedbackLabel}>PRL Feedback</Text>
                       <Text style={styles.feedbackText}>{item.feedback}</Text>
                       {item.feedbackBy && (
                         <Text style={styles.feedbackBy}>— {item.feedbackBy}</Text>
@@ -276,86 +261,43 @@ const Detail = ({ label, value }) => (
 );
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f3f4f6', padding: 16 },
-  loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  container: { flex: 1, backgroundColor: '#f3f4f6' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
   loaderText: { fontSize: 14, color: '#6b7280', marginTop: 8 },
-  topBar: {
-    flexDirection: 'row', justifyContent: 'flex-end',
-    alignItems: 'center', gap: 10, marginBottom: 12,
-  },
-  refreshBtn: {
-    padding: 8, backgroundColor: '#eff6ff',
-    borderRadius: 8, borderWidth: 1, borderColor: '#0dff00',
-  },
-  exportBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#eff6ff', borderRadius: 8,
-    paddingHorizontal: 12, paddingVertical: 8,
-    borderWidth: 1, borderColor: '#bfdbfe',
-  },
+  
+  topBar: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 10, marginTop: 16, marginHorizontal: 16, marginBottom: 12 },
+  refreshBtn: { padding: 8, backgroundColor: '#f3f4f6', borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb' },
+  exportBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#f3f4f6', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#e5e7eb' },
   exportBtnDisabled: { opacity: 0.5 },
-  exportText: { fontSize: 13, color: '#ff0000', fontWeight: '700' },
-  searchWrapper: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#fff', borderRadius: 10,
-    paddingHorizontal: 12, paddingVertical: 9,
-    borderWidth: 1, borderColor: '#e6ebe5', marginBottom: 12,
-  },
+  exportText: { fontSize: 13, color: '#000000', fontWeight: '600' },
+  
+  searchWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: '#e5e7eb', marginHorizontal: 16, marginBottom: 12 },
   searchIcon: { marginRight: 8 },
   searchInput: { flex: 1, fontSize: 14, color: '#111827' },
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#374151', marginBottom: 10 },
-  card: {
-    backgroundColor: '#fff', borderRadius: 14,
-    padding: 14, marginBottom: 10, elevation: 1,
-    borderWidth: 1.5, borderColor: '#f3f4f6',
-  },
-  cardOpen: { borderColor: '#bffed1' },
-  cardHeader: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'flex-start', marginBottom: 8,
-  },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#374151', marginLeft: 16, marginBottom: 10 },
+  
+  card: { backgroundColor: '#fff', borderRadius: 14, padding: 14, marginHorizontal: 16, marginBottom: 10, elevation: 1, borderWidth: 1, borderColor: '#f3f4f6' },
+  cardOpen: { borderColor: '#000000', borderWidth: 2 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
   cardHeaderLeft: { flex: 1 },
   cardHeaderRight: { alignItems: 'flex-end', gap: 5 },
   courseCode: { fontSize: 16, fontWeight: '800', color: '#000000' },
   courseName: { fontSize: 13, color: '#374151', fontWeight: '500', marginTop: 1 },
   date: { fontSize: 12, color: '#6b7280', marginTop: 3 },
-  weekBadge: {
-    backgroundColor: '#eff6ff', borderRadius: 8,
-    paddingHorizontal: 10, paddingVertical: 4,
-  },
-  weekText: { fontSize: 12, color: '#ff0000', fontWeight: '700' },
-  feedbackBadge: {
-    backgroundColor: '#f0fdf4', borderRadius: 6,
-    paddingHorizontal: 8, paddingVertical: 3,
-  },
+  weekBadge: { backgroundColor: '#f3f4f6', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+  weekText: { fontSize: 12, color: '#000000', fontWeight: '700' },
+  feedbackBadge: { backgroundColor: '#f0fdf4', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
   feedbackBadgeText: { fontSize: 11, color: '#16a34a', fontWeight: '700' },
   topic: { fontSize: 13, color: '#374151', marginBottom: 8, lineHeight: 18 },
-  quickStats: {
-    flexDirection: 'row', alignItems: 'center',
-    gap: 10, marginBottom: 4, flexWrap: 'wrap',
-  },
+  quickStats: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4, flexWrap: 'wrap' },
   quickStat: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   quickStatText: { fontSize: 12, color: '#6b7280' },
-  ratePill: {
-    fontSize: 11, fontWeight: '700',
-    paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20,
-  },
-  details: {
-    borderTopWidth: 1, borderTopColor: '#f3f4f6',
-    paddingTop: 12, marginTop: 8,
-  },
-  detailRow: {
-    flexDirection: 'row', marginBottom: 6,
-    paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: '#f9fafb',
-  },
+  ratePill: { fontSize: 11, fontWeight: '700', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20 },
+  details: { borderTopWidth: 1, borderTopColor: '#f3f4f6', paddingTop: 12, marginTop: 8 },
+  detailRow: { flexDirection: 'row', marginBottom: 6, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: '#f9fafb' },
   detailLabel: { fontSize: 12, fontWeight: '700', color: '#6b7280', width: 140 },
   detailValue: { fontSize: 12, color: '#374151', flex: 1, lineHeight: 18 },
-  feedbackBox: {
-    backgroundColor: '#fffbeb', borderRadius: 10,
-    padding: 12, marginTop: 10,
-    borderWidth: 1, borderColor: '#fde68a',
-    borderLeftWidth: 4, borderLeftColor: '#f59e0b',
-  },
+  feedbackBox: { backgroundColor: '#fffbeb', borderRadius: 10, padding: 12, marginTop: 10, borderWidth: 1, borderColor: '#fde68a', borderLeftWidth: 4, borderLeftColor: '#f59e0b' },
   feedbackLabel: { fontSize: 12, fontWeight: '700', color: '#92400e', marginBottom: 6 },
   feedbackText: { fontSize: 13, color: '#78350f', lineHeight: 18 },
   feedbackBy: { fontSize: 11, color: '#92400e', marginTop: 6, fontStyle: 'italic', textAlign: 'right' },

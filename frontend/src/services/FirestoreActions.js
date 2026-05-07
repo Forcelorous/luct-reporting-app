@@ -1,22 +1,19 @@
-// src/services/FirestoreActions.js
-import { firestore } from './FirebaseConfig';
+import { db } from './FirebaseConfig';
 import { COLLECTIONS } from '../utils/constants';
+import { collection, addDoc, getDocs, query, where } from 'firebase/firestore';
 
 // Add a new report
 export const addReport = async (report) => {
-  return await firestore.collection(COLLECTIONS.REPORTS).add({
+  return await addDoc(collection(db, COLLECTIONS.REPORTS), {
     ...report,
     createdAt: new Date()
   });
 };
 
-// Get all reports
+// Get all reports by lecturer
 export const getReportsByLecturer = async (lecturerUID) => {
   try {
-    const q = query(
-      collection(db, 'reports'),
-      where('lecturerUID', '==', lecturerUID)
-    );
+    const q = query(collection(db, COLLECTIONS.REPORTS), where('lecturerUID', '==', lecturerUID));
     const snapshot = await getDocs(q);
     const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
     return data.sort((a, b) => {
@@ -32,7 +29,7 @@ export const getReportsByLecturer = async (lecturerUID) => {
 
 // Add attendance record
 export const addAttendance = async (record) => {
-  return await firestore.collection(COLLECTIONS.ATTENDANCE).add({
+  return await addDoc(collection(db, COLLECTIONS.ATTENDANCE), {
     ...record,
     createdAt: new Date()
   });
@@ -40,13 +37,13 @@ export const addAttendance = async (record) => {
 
 // Get attendance records
 export const getAttendance = async () => {
-  const snapshot = await firestore.collection(COLLECTIONS.ATTENDANCE).get();
+  const snapshot = await getDocs(collection(db, COLLECTIONS.ATTENDANCE));
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 };
 
 // Submit feedback
 export const addFeedback = async (feedback) => {
-  return await firestore.collection(COLLECTIONS.FEEDBACK).add({
+  return await addDoc(collection(db, COLLECTIONS.FEEDBACK), {
     feedback,
     createdAt: new Date()
   });

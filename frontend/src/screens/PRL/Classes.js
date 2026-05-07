@@ -1,17 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
-import { firestore } from '../../services/FirebaseConfig';
+import { getAllReports } from '../../services/api';
 
 export default function PRLClasses() {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = firestore.collection('reports').onSnapshot(
-      snap => { setReports(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoading(false); },
-      err => { console.error(err); setLoading(false); }
-    );
-    return unsubscribe;
+    let mounted = true;
+    const fetchReports = async () => {
+      try {
+        const data = await getAllReports();
+        if (mounted) setReports(data);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    fetchReports();
+    return () => { mounted = false; };
   }, []);
 
   if (loading) return (
@@ -61,8 +69,8 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 12, elevation: 2 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   courseName: { fontSize: 15, fontWeight: '700', color: '#1a56db', flex: 1 },
-  code: { fontSize: 12, color: '#6b7280', backgroundColor: '#f3f4f6', padding: 4, borderRadius: 6 },
+  code: { fontSize: 12, color: '#f21a1a', backgroundColor: '#f3f4f6', padding: 4, borderRadius: 6 },
   detail: { fontSize: 13, color: '#374151', marginBottom: 3 },
   feedbackBadge: { backgroundColor: '#f0fdf4', borderRadius: 6, padding: 6, marginTop: 8 },
   feedbackText: { fontSize: 12, color: '#059669', fontWeight: '700' },
-});
+}); 

@@ -1,5 +1,6 @@
-import React from 'react';
-import { TextInput, StyleSheet, View, Text } from 'react-native';
+import React, { useState } from 'react';
+import { TextInput, StyleSheet, View, Text, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function Input({
   label,
@@ -10,10 +11,13 @@ export default function Input({
   autoCapitalize = 'sentences',
   autoCorrect = true,
   placeholder = '',
-  theme = 'dark', 
-}) 
+  theme = 'dark',
+  multiline = false,
+  numberOfLines = 1,
+  editable = true,
+}) {
+  const [showPassword, setShowPassword] = useState(false);
 
-{
   return (
     <View style={styles.container}>
       {label && (
@@ -21,26 +25,50 @@ export default function Input({
           {label}
         </Text>
       )}
-      <TextInput
-        style={[styles.input, theme === 'light' ? styles.inputLight : styles.inputDark]}
-        value={value}
-        onChangeText={onChangeText}
-        secureTextEntry={secureTextEntry}
-        keyboardType={keyboardType}
-        autoCapitalize={autoCapitalize}
-        autoCorrect={autoCorrect}
-        placeholder={placeholder}
-        placeholderTextColor={theme === 'light' ? '#999999' : '#666666'}
-      />
+      <View style={[
+        styles.inputWrapper,
+        theme === 'light' ? styles.inputWrapperLight : styles.inputWrapperDark,
+        !editable && styles.inputDisabled,
+      ]}>
+        <TextInput
+          style={[
+            styles.input,
+            theme === 'light' ? styles.inputLight : styles.inputDark,
+            multiline && styles.multiline,
+          ]}
+          value={value}
+          onChangeText={onChangeText}
+          secureTextEntry={secureTextEntry && !showPassword}
+          keyboardType={keyboardType}
+          autoCapitalize={autoCapitalize}
+          autoCorrect={autoCorrect}
+          placeholder={placeholder}
+          placeholderTextColor={theme === 'light' ? '#9ca3af' : '#666666'}
+          multiline={multiline}
+          numberOfLines={numberOfLines}
+          editable={editable}
+        />
+        {secureTextEntry && (
+          <TouchableOpacity
+            onPress={() => setShowPassword(!showPassword)}
+            style={styles.eyeIcon}
+          >
+            <Ionicons
+              name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+              size={20}
+              color={theme === 'light' ? '#6b7280' : '#888888'}
+            />
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 10,
+    marginVertical: 8,
   },
-
   label: {
     fontWeight: 'bold',
     marginBottom: 5,
@@ -48,37 +76,49 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  //  (Login)
-  labelDark: {
-    color: '#ffffff',
+  // Label colors
+  labelDark: { color: '#ffffff' },
+  labelLight: { color: '#374151' },
+
+  // Input wrapper
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderRadius: 8,
+  },
+  inputWrapperDark: {
+    borderColor: '#c9a84c',
+    backgroundColor: '#1a1a1a',
+  },
+  inputWrapperLight: {
+    borderColor: '#d1d5db',
+    backgroundColor: '#ffffff',
+  },
+  inputDisabled: {
+    opacity: 0.6,
+  },
+
+  // Text input
+  input: {
+    flex: 1,
+    padding: 12,
+    fontSize: 14,
   },
   inputDark: {
-    borderWidth: 1.5,
-    borderColor: '#c9a84c',
-    borderRadius: 8,
-    padding: 12,
     color: '#ffffff',
-    backgroundColor: '#1a1a1a',
-    fontSize: 14,
-  },
-
-  //  (Register) 
-  labelLight: {
-    color: '#374151',
   },
   inputLight: {
-    borderWidth: 1.5,
-    borderColor: '#222428',
-    borderRadius: 8,
-    padding: 12,
-    color: '#f5f7fb',
-    backgroundColor: '#f9fafb',
-    fontSize: 14,
+    color: '#111827',
+  },
+  multiline: {
+    minHeight: 80,
+    textAlignVertical: 'top',
   },
 
-  input: {
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 14,
+  // Eye icon 
+  eyeIcon: {
+    paddingRight: 12,
+    paddingLeft: 4,
   },
 });

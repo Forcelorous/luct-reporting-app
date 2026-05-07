@@ -1,15 +1,29 @@
 import { auth } from './FirebaseConfig';
 
-const BASE_URL = 'http://192.168.x.x:5000/api'; 
+// ✅ Your PC's local WiFi IP — update this if IP changes (run ipconfig to check)
+const BASE_URL = 'http://10.203.157.187:5000/api';
 
-// Get Firebase auth token for the current user
+
+// ✅ Get a fresh Firebase token (true = force refresh if expired)
 const getToken = async () => {
   const user = auth.currentUser;
   if (!user) throw new Error('Not authenticated');
-  return await user.getIdToken();
+  return await user.getIdToken(true);
 };
 
-// Base fetch wrapper with auth header
+// ✅ Safe JSON parser — catches HTML error pages or server crashes
+const parseResponse = async (res) => {
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    const text = await res.text();
+    throw new Error(`Server returned non-JSON response: ${text.slice(0, 120)}`);
+  }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `API error ${res.status}`);
+  return data;
+};
+
+// ✅ Authenticated fetch — attaches Bearer token
 const apiFetch = async (endpoint, options = {}) => {
   const token = await getToken();
   const res = await fetch(`${BASE_URL}${endpoint}`, {
@@ -20,9 +34,19 @@ const apiFetch = async (endpoint, options = {}) => {
       ...options.headers,
     },
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'API error');
-  return data;
+  return parseResponse(res);
+};
+
+// ✅ Public fetch — no token, used for /courses during registration
+export const publicFetch = async (endpoint, options = {}) => {
+  const res = await fetch(`${BASE_URL}${endpoint}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+  return parseResponse(res);
 };
 
 // USERS
@@ -49,7 +73,7 @@ export const openSession = (data) => apiFetch('/attendance/sessions', { method: 
 export const closeSession = (id, data) => apiFetch(`/attendance/sessions/${id}/close`, { method: 'PATCH', body: JSON.stringify(data) });
 export const studentCheckIn = (data) => apiFetch('/attendance/checkin', { method: 'POST', body: JSON.stringify(data) });
 
-// RATINGS 
+// RATINGS
 export const getAllRatings = () => apiFetch('/ratings');
 export const getRatingsSummary = () => apiFetch('/ratings/summary');
 export const getRatingsByLecturer = (email) => apiFetch(`/ratings/lecturer/${encodeURIComponent(email)}`);
@@ -57,6 +81,7 @@ export const submitRating = (data) => apiFetch('/ratings', { method: 'POST', bod
 
 // COURSES
 export const getAllCourses = () => apiFetch('/courses');
+export const getCourses = () => publicFetch('/courses'); // ✅ public — safe during registration
 export const addCourse = (data) => apiFetch('/courses', { method: 'POST', body: JSON.stringify(data) });
 export const deleteCourse = (id) => apiFetch(`/courses/${id}`, { method: 'DELETE' });
 

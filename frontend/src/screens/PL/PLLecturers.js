@@ -1,33 +1,39 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
-import { firestore } from '../../services/FirebaseConfig';
+import { getAllReports } from '../../services/api';
 
 export default function PLLecturers() {
-  const [lecturers, setLecturers] = useState([]);
-  const [assignments, setAssignments] = useState([]);
+  const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubs = [];
-
-    unsubs.push(firestore.collection('users')
-      .where('role', '==', 'Lecturer')
-      .onSnapshot(snapshot => {
-        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setLecturers(data);
-        setLoading(false);
-      }));
-
-    unsubs.push(firestore.collection('assignments').onSnapshot(snapshot => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setAssignments(data);
-    }));
-
-    return () => unsubs.forEach(u => u());
+    let mounted = true;
+    const fetchReports = async () => {
+      try {
+        const data = await getAllReports();
+        if (mounted) setReports(data);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    fetchReports();
+    return () => { mounted = false; };
   }, []);
 
-  const getAssignedCourses = (email) =>
-    assignments.filter(a => a.lecturerEmail === email).map(a => a.courseCode);
+  const lecturerMap = reports.reduce((acc, r) => {
+    const key = r.lecturerEmail || r.lecturerName;
+    if (!key) return acc;
+    if (!acc[key]) acc[key] = { email: r.lecturerEmail || r.lecturerName, courses: new Set() };
+    if (r.courseCode) acc[key].courses.add(r.courseCode);
+    return acc;
+  }, {});
+
+  const lecturers = Object.values(lecturerMap).map(l => ({
+    ...l,
+    courses: [...l.courses],
+  }));
 
   if (loading) return <ActivityIndicator size="large" color="#1a56db" style={styles.loader} />;
 
@@ -36,25 +42,22 @@ export default function PLLecturers() {
       <Text style={styles.sectionTitle}>Lecturers ({lecturers.length})</Text>
       <FlatList
         data={lecturers}
-        keyExtractor={item => item.id}
-        renderItem={({ item }) => {
-          const courses = getAssignedCourses(item.email);
-          return (
-            <View style={styles.card}>
-              <Text style={styles.email}>{item.email}</Text>
-              <View style={styles.chips}>
-                {courses.length > 0
-                  ? courses.map(code => (
-                      <View key={code} style={styles.chip}>
-                        <Text style={styles.chipText}>{code}</Text>
-                      </View>
-                    ))
-                  : <Text style={styles.noAssign}>No courses assigned</Text>
-                }
-              </View>
+        keyExtractor={item => item.email}
+        renderItem={({ item }) => (
+          <View style={styles.card}>
+            <Text style={styles.email}>{item.email}</Text>
+            <View style={styles.chips}>
+              {item.courses.length > 0
+                ? item.courses.map(code => (
+                    <View key={code} style={styles.chip}>
+                      <Text style={styles.chipText}>{code}</Text>
+                    </View>
+                  ))
+                : <Text style={styles.noAssign}>No courses assigned</Text>
+              }
             </View>
-          );
-        }}
+          </View>
+        )}
         ListEmptyComponent={<Text style={styles.empty}>No lecturers registered yet.</Text>}
       />
     </View>

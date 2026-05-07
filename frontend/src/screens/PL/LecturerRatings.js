@@ -1,179 +1,119 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, FlatList, StyleSheet,
-  ActivityIndicator, TouchableOpacity,
+  View, Text, TextInput, FlatList, StyleSheet,
+  TouchableOpacity, Alert, ActivityIndicator
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { firestore } from '../../services/FirebaseConfig';
+import { getAllCourses, addCourse, deleteCourse } from '../../services/api';
 
-export default function LecturerRatings() {
-  const [grouped, setGrouped] = useState([]);
-  const [expanded, setExpanded] = useState({});
+export default function CourseManagement() {
+  const [courseName, setCourseName] = useState('');
+  const [courseCode, setCourseCode] = useState('');
+  const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
 
-  useEffect(() => {
-    const unsubscribe = firestore
-      .collection('ratings')
-      .orderBy('createdAt', 'desc')
-      .onSnapshot(snapshot => {
-        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-        // Group by lecturerEmail, display lecturerName
-        const map = {};
-        data.forEach(r => {
-          const key = r.lecturerEmail || 'unknown';
-          if (!map[key]) {
-            map[key] = {
-              email: r.lecturerEmail || '—',
-              name: r.lecturerName || r.lecturerEmail || 'Unknown',
-              items: [],
-            };
-          }
-          map[key].items.push(r);
-        });
-
-        const result = Object.values(map).map(group => {
-          const avg = (
-            group.items.reduce((sum, r) => sum + (r.rating || 0), 0) / group.items.length
-          ).toFixed(1);
-          return { ...group, avg, count: group.items.length };
-        });
-
-        result.sort((a, b) => b.avg - a.avg);
-        setGrouped(result);
-        setLoading(false);
-      });
-    return unsubscribe;
-  }, []);
-
-  const toggleExpand = email => {
-    setExpanded(prev => ({ ...prev, [email]: !prev[email] }));
+  const loadCourses = async () => {
+    try {
+      const data = await getAllCourses();
+      setCourses(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  if (loading) {
-    return <ActivityIndicator size="large" color="#1a56db" style={styles.loader} />;
-  }
+  useEffect(() => { loadCourses(); }, []);
+
+  const handleAddCourse = async () => {
+    if (!courseName.trim() || !courseCode.trim()) {
+      Alert.alert('Error', 'Please enter both course name and code.');
+      return;
+    }
+    setAdding(true);
+    try {
+      await addCourse({ courseName: courseName.trim(), courseCode: courseCode.trim() });
+      setCourseName('');
+      setCourseCode('');
+      await loadCourses();
+    } catch (error) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleDelete = (id, name) => {
+    Alert.alert('Delete Course', `Delete "${name}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteCourse(id);
+            await loadCourses();
+          } catch (error) {
+            Alert.alert('Error', error.message);
+          }
+        },
+      },
+    ]);
+  };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.pageTitle}>Lecturer Ratings</Text>
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Add New Course</Text>
+        <TextInput style={styles.input} placeholder="Course Name" value={courseName} onChangeText={setCourseName} />
+        <TextInput style={styles.input} placeholder="Course Code" value={courseCode} onChangeText={setCourseCode} autoCapitalize="characters" />
+        <TouchableOpacity style={[styles.addBtn, adding && styles.addBtnDisabled]} onPress={handleAddCourse} disabled={adding}>
+          {adding ? <ActivityIndicator color="#fff" /> : <Text style={styles.addBtnText}>+ ADD COURSE</Text>}
+        </TouchableOpacity>
+      </View>
 
-      <FlatList
-        data={grouped}
-        keyExtractor={item => item.email}
-        ListEmptyComponent={
-          <Text style={styles.empty}>No ratings submitted yet.</Text>
-        }
-        renderItem={({ item }) => (
-          <View style={styles.lecturerCard}>
-            <TouchableOpacity
-              style={styles.lecturerHeader}
-              onPress={() => toggleExpand(item.email)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.avatarCircle}>
-                <Text style={styles.avatarText}>
-                  {item.name.charAt(0).toUpperCase()}
-                </Text>
-              </View>
+      <Text style={styles.sectionTitle}>All Courses ({courses.length})</Text>
 
-              <View style={styles.lecturerInfo}>
-                <Text style={styles.lecturerName}>{item.name}</Text>
-                <Text style={styles.lecturerEmail}>{item.email}</Text>
-                <Text style={styles.lecturerSub}>
-                  {item.count} rating{item.count !== 1 ? 's' : ''}
-                </Text>
-              </View>
-
-              <View style={styles.ratingBadge}>
-                <Text style={styles.ratingBadgeText}>{item.avg}</Text>
-                <Text style={styles.ratingBadgeStar}>★</Text>
-              </View>
-
-              <Ionicons
-                name={expanded[item.email] ? 'chevron-up' : 'chevron-down'}
-                size={18}
-                color="#9ca3af"
-                style={{ marginLeft: 8 }}
-              />
-            </TouchableOpacity>
-
-            {expanded[item.email] && (
-              <View style={styles.ratingsList}>
-                {item.items.map(r => (
-                  <View key={r.id} style={styles.ratingRow}>
-                    <View style={styles.ratingRowTop}>
-                      <Text style={styles.stars}>
-                        {'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}
-                      </Text>
-                      <Text style={styles.ratingNum}>{r.rating}/5</Text>
-                    </View>
-                    {r.courseCode ? (
-                      <Text style={styles.meta}>Course: {r.courseCode}</Text>
-                    ) : null}
-                    {r.studentEmail ? (
-                      <Text style={styles.meta}>Student: {r.studentEmail}</Text>
-                    ) : null}
-                    {r.comment ? (
-                      <Text style={styles.comment}>"{r.comment}"</Text>
-                    ) : null}
-                    <Text style={styles.date}>
-                      {r.createdAt?.toDate().toDateString()}
-                    </Text>
-                  </View>
-                ))}
+      {loading
+        ? <ActivityIndicator size="large" color="#1a56db" style={{ marginTop: 20 }} />
+        : <FlatList
+            data={courses}
+            keyExtractor={item => item.id}
+            renderItem={({ item }) => (
+              <View style={styles.courseCard}>
+                <View style={styles.courseInfo}>
+                  <Text style={styles.courseName}>{item.courseName}</Text>
+                  <Text style={styles.courseCode}>{item.courseCode}</Text>
+                  <Text style={styles.courseDate}>
+                    Added: {item.createdAt ? new Date(item.createdAt).toDateString() : '—'}
+                  </Text>
+                </View>
+                <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(item.id, item.courseName)}>
+                  <Text style={styles.deleteBtnText}>✕</Text>
+                </TouchableOpacity>
               </View>
             )}
-          </View>
-        )}
-      />
+            ListEmptyComponent={<Text style={styles.empty}>No courses added yet.</Text>}
+          />
+      }
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f3f4f6', padding: 16 },
-  loader: { flex: 1, marginTop: 40 },
-  pageTitle: { fontSize: 18, fontWeight: '800', color: '#111827', marginBottom: 14 },
-  empty: { textAlign: 'center', color: '#9ca3af', marginTop: 40 },
-
-  lecturerCard: {
-    backgroundColor: '#fff', borderRadius: 12,
-    marginBottom: 10, elevation: 1, overflow: 'hidden',
-  },
-  lecturerHeader: {
-    flexDirection: 'row', alignItems: 'center', padding: 14,
-  },
-  avatarCircle: {
-    width: 42, height: 42, borderRadius: 21,
-    backgroundColor: '#db1a1a', justifyContent: 'center', alignItems: 'center',
-    marginRight: 12,
-  },
-  avatarText: { color: '#fff', fontWeight: '800', fontSize: 18 },
-  lecturerInfo: { flex: 1 },
-  lecturerName: { fontSize: 14, fontWeight: '700', color: '#111827' },
-  lecturerEmail: { fontSize: 12, color: '#6b7280', marginTop: 1 },
-  lecturerSub: { fontSize: 12, color: '#9ca3af', marginTop: 2 },
-  ratingBadge: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#dfe7de', borderRadius: 8,
-    paddingHorizontal: 10, paddingVertical: 4,
-  },
-  ratingBadgeText: { fontSize: 16, fontWeight: '800', color: '#92400e' },
-  ratingBadgeStar: { fontSize: 14, color: '#f59e0b', marginLeft: 2 },
-
-  ratingsList: {
-    borderTopWidth: 1, borderTopColor: '#f3f4f6', paddingHorizontal: 14,
-  },
-  ratingRow: {
-    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f9fafb',
-  },
-  ratingRowTop: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-  },
-  stars: { fontSize: 15, color: '#f59e0b' },
-  ratingNum: { fontSize: 13, fontWeight: '700', color: '#111827' },
-  meta: { fontSize: 12, color: '#6b7280', marginTop: 3 },
-  comment: { fontSize: 13, color: '#374151', fontStyle: 'italic', marginTop: 4 },
-  date: { fontSize: 11, color: '#9ca3af', marginTop: 4 },
+  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 16, elevation: 2 },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 12 },
+  input: { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, padding: 10, marginBottom: 10, backgroundColor: '#f9fafb', fontSize: 14 },
+  addBtn: { backgroundColor: '#00ff40', borderRadius: 8, padding: 12, alignItems: 'center' },
+  addBtnDisabled: { backgroundColor: '#93c5fd' },
+  addBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: '#374151', marginBottom: 10 },
+  courseCard: { backgroundColor: '#fff', borderRadius: 10, padding: 14, marginBottom: 8, flexDirection: 'row', alignItems: 'center', elevation: 1 },
+  courseInfo: { flex: 1 },
+  courseName: { fontSize: 15, fontWeight: '700', color: '#0314ff' },
+  courseCode: { fontSize: 12, fontWeight: '600', color: '#f91212', marginTop: 2 },
+  courseDate: { fontSize: 11, color: '#9ca3af', marginTop: 2 },
+  deleteBtn: { backgroundColor: '#fee2e2', borderRadius: 8, width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  deleteBtnText: { color: '#ef4444', fontWeight: '700' },
+  empty: { textAlign: 'center', color: '#9ca3af', marginTop: 20 },
 });

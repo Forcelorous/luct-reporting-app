@@ -27,24 +27,20 @@ app.get('/', (req, res) => {
   res.json({ message: 'LUCT Reporting API is running', version: '1.0.0' });
 });
 
-
 //  Test firebase route 
 app.get('/test-firebase', async (req, res) => {
   console.log("🔥 /test-firebase route hit");
-
   try {
     const docRef = await db.collection('test').add({
       message: 'Firebase is connected!',
       time: new Date()
     });
-
     res.send(`✅ Firebase connected. Doc ID: ${docRef.id}`);
   } catch (error) {
     console.error("❌ Firebase error:", error);
     res.status(500).send('❌ Firebase NOT connected');
   }
 });
-
 
 // Routes
 app.use('/api/users', usersRoutes);
@@ -53,7 +49,7 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/ratings', ratingsRoutes);
 app.use('/api/courses', coursesRoutes);
 
-// handler
+// 404 handler
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
@@ -64,8 +60,10 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-app.listen(PORT, () => {
+// ✅ Bind to 0.0.0.0 so devices on the same network can reach the server
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ LUCT Backend running on http://localhost:${PORT}`);
+  console.log(`✅ Network access: http://10.91.167.187:${PORT}`);
 });
 
 module.exports = app;

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
-import { firestore } from '../../services/FirebaseConfig';
+import { db } from '../../services/FirebaseConfig';
+import { collection, onSnapshot } from 'firebase/firestore';
 
 export default function StreamOverview() {
   const [courses, setCourses] = useState([]);
@@ -11,20 +12,27 @@ export default function StreamOverview() {
     let loadedCourses = false, loadedReports = false;
     const check = () => { if (loadedCourses && loadedReports) setLoading(false); };
 
-    const u1 = firestore.collection('courses').onSnapshot(snap => {
-      setCourses(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      loadedCourses = true; check();
-    }, () => { loadedCourses = true; check(); });
+    const u1 = onSnapshot(
+      collection(db, 'courses'),
+      snap => {
+        setCourses(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        loadedCourses = true; check();
+      },
+      () => { loadedCourses = true; check(); }
+    );
 
-    const u2 = firestore.collection('reports').onSnapshot(snap => {
-      setReports(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      loadedReports = true; check();
-    }, () => { loadedReports = true; check(); });
+    const u2 = onSnapshot(
+      collection(db, 'reports'),
+      snap => {
+        setReports(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        loadedReports = true; check();
+      },
+      () => { loadedReports = true; check(); }
+    );
 
     return () => { u1(); u2(); };
   }, []);
 
-  // Derive unique courses from reports if courses collection is empty
   const allCourses = courses.length > 0 ? courses : [
     ...new Map(reports.map(r => [r.courseCode, {
       id: r.courseCode, courseName: r.courseName,

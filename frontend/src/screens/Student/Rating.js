@@ -4,7 +4,8 @@ import {
   TextInput, Alert, ActivityIndicator, Modal, ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { firestore, auth } from '../../services/FirebaseConfig';
+import { db, auth } from '../../services/FirebaseConfig';
+import { collection, query, where, orderBy, onSnapshot, addDoc } from 'firebase/firestore';
 
 export default function StudentRating() {
   const [assignments, setAssignments] = useState([]);
@@ -19,40 +20,29 @@ export default function StudentRating() {
   const studentEmail = auth.currentUser?.email;
 
   useEffect(() => {
-    const unsubscribe = firestore
-      .collection('assignments')
-      .orderBy('assignedAt', 'desc')
-      .onSnapshot(snapshot => {
-        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setAssignments(data);
-        setLoading(false);
-      });
+    const q = query(collection(db, 'assignments'), orderBy('assignedAt', 'desc'));
+    const unsubscribe = onSnapshot(q, snapshot => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setAssignments(data);
+      setLoading(false);
+    });
     return unsubscribe;
   }, []);
 
   useEffect(() => {
     if (!studentEmail) return;
-    const unsubscribe = firestore
-      .collection('ratings')
-      .where('studentEmail', '==', studentEmail)
-      .onSnapshot(snapshot => {
-        const keys = new Set(
-          snapshot.docs.map(doc => {
-            const d = doc.data();
-            return `${d.lecturerEmail}_${d.courseCode}`;
-          })
-        );
-        setSubmittedKeys(keys);
-      });
+    const q = query(collection(db, 'ratings'), where('studentEmail', '==', studentEmail));
+    const unsubscribe = onSnapshot(q, snapshot => {
+      const keys = new Set(
+        snapshot.docs.map(doc => {
+          const d = doc.data();
+          return `${d.lecturerEmail}_${d.courseCode}`;
+        })
+      );
+      setSubmittedKeys(keys);
+    });
     return unsubscribe;
   }, [studentEmail]);
-
-  const openModal = (item) => {
-    setSelected(item);
-    setStarRating(0);
-    setComment('');
-    setModalVisible(true);
-  };
 
   const handleSubmit = async () => {
     if (starRating === 0) {
@@ -61,7 +51,7 @@ export default function StudentRating() {
     }
     setSubmitting(true);
     try {
-      await firestore.collection('ratings').add({
+      await addDoc(collection(db, 'ratings'), {
         lecturerEmail: selected.lecturerEmail,
         lecturerName: selected.lecturerName || selected.lecturerEmail,
         courseCode: selected.courseCode,
@@ -71,6 +61,8 @@ export default function StudentRating() {
         createdAt: new Date(),
       });
       setModalVisible(false);
+      setStarRating(0);
+      setComment('');
       Alert.alert('Success', 'Rating submitted!');
     } catch (error) {
       Alert.alert('Error', error.message);
@@ -79,124 +71,85 @@ export default function StudentRating() {
     }
   };
 
+  const renderStars = (value, onPress) => (
+    <View style={styles.starRow}>
+      {[1, 2, 3, 4, 5].map(n => (
+        <TouchableOpacity key={n} onPress={() => onPress(n)}>
+          <Ionicons
+            name={value >= n ? 'star' : 'star-outline'}
+            size={28}
+            color="#fbbf24"
+            style={{ marginHorizontal: 2 }}
+          />
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+
   if (loading) {
-    return <ActivityIndicator size="large" color="#1a56db" style={styles.loader} />;
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#1a56db" />
+      </View>
+    );
   }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.pageTitle}>Rate Your Lecturers</Text>
-      <Text style={styles.pageSub}>Tap a lecturer to submit your rating</Text>
-
+      <Text style={styles.title}>Assignments to Rate</Text>
       <FlatList
         data={assignments}
         keyExtractor={item => item.id}
-        ListEmptyComponent={
-          <Text style={styles.empty}>No lecturers assigned yet.</Text>
-        }
         renderItem={({ item }) => {
-          const alreadyRated = submittedKeys.has(
-            `${item.lecturerEmail}_${item.courseCode}`
-          );
+          const key = `${item.lecturerEmail}_${item.courseCode}`;
+          const alreadySubmitted = submittedKeys.has(key);
           return (
-            <TouchableOpacity
-              style={[styles.card, alreadyRated && styles.cardRated]}
-              onPress={() => !alreadyRated && openModal(item)}
-              activeOpacity={alreadyRated ? 1 : 0.7}
-            >
-              <View style={styles.avatarCircle}>
-                <Text style={styles.avatarText}>
-                  {(item.lecturerName || item.lecturerEmail).charAt(0).toUpperCase()}
+            <View style={styles.card}>
+              <Text style={styles.course}>{item.courseCode} - {item.courseName}</Text>
+              <Text style={styles.lecturer}>Lecturer: {item.lecturerName || item.lecturerEmail}</Text>
+              <TouchableOpacity
+                style={[styles.rateBtn, alreadySubmitted && styles.rateBtnDisabled]}
+                disabled={alreadySubmitted}
+                onPress={() => {
+                  setSelected(item);
+                  setModalVisible(true);
+                }}
+              >
+                <Text style={styles.rateBtnText}>
+                  {alreadySubmitted ? 'Already Rated' : 'Rate Lecturer'}
                 </Text>
-              </View>
-              <View style={styles.cardInfo}>
-                <Text style={styles.lecturerName}>
-                  {item.lecturerName || item.lecturerEmail}
-                </Text>
-                <Text style={styles.lecturerEmail}>{item.lecturerEmail}</Text>
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{item.courseCode}</Text>
-                </View>
-              </View>
-              {alreadyRated ? (
-                <View style={styles.ratedBadge}>
-                  <Ionicons name="checkmark-circle" size={18} color="#10b981" />
-                  <Text style={styles.ratedText}>Rated</Text>
-                </View>
-              ) : (
-                <Ionicons name="star-outline" size={22} color="#f59e0b" />
-              )}
-            </TouchableOpacity>
+              </TouchableOpacity>
+            </View>
           );
         }}
+        ListEmptyComponent={<Text style={styles.empty}>No assignments found.</Text>}
       />
 
-      <Modal
-        visible={modalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setModalVisible(false)}
-      >
+      <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Rate Lecturer</Text>
-                <TouchableOpacity onPress={() => setModalVisible(false)}>
-                  <Ionicons name="close" size={22} color="#6b7280" />
-                </TouchableOpacity>
-              </View>
-
-              {selected && (
-                <>
-                  <Text style={styles.modalLecturer}>
-                    {selected.lecturerName || selected.lecturerEmail}
-                  </Text>
-                  <Text style={styles.modalEmail}>{selected.lecturerEmail}</Text>
-                  <View style={styles.modalCourseBadge}>
-                    <Text style={styles.modalCourseText}>{selected.courseCode}</Text>
-                  </View>
-                </>
-              )}
-
-              <Text style={styles.starLabel}>Your Rating</Text>
-              <View style={styles.starsRow}>
-                {[1, 2, 3, 4, 5].map(val => (
-                  <TouchableOpacity key={val} onPress={() => setStarRating(val)}>
-                    <Ionicons
-                      name={val <= starRating ? 'star' : 'star-outline'}
-                      size={40}
-                      color="#f59e0b"
-                      style={styles.starIcon}
-                    />
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <Text style={styles.starValue}>
-                {starRating > 0 ? `${starRating} / 5` : 'Tap to rate'}
-              </Text>
-
-              <Text style={styles.commentLabel}>Comment (optional)</Text>
+          <View style={styles.modalContent}>
+            <ScrollView>
+              <Text style={styles.modalTitle}>Rate {selected?.lecturerName || selected?.lecturerEmail}</Text>
+              {renderStars(starRating, setStarRating)}
               <TextInput
-                style={styles.commentInput}
-                placeholder="Share your experience..."
+                style={styles.input}
+                placeholder="Leave a comment (optional)"
                 value={comment}
                 onChangeText={setComment}
                 multiline
-                numberOfLines={4}
-                textAlignVertical="top"
               />
-
-              <TouchableOpacity
-                style={[styles.submitBtn, submitting && styles.submitBtnDisabled]}
-                onPress={handleSubmit}
-                disabled={submitting}
-              >
-                {submitting
-                  ? <ActivityIndicator color="#fff" />
-                  : <Text style={styles.submitBtnText}>SUBMIT RATING</Text>
-                }
-              </TouchableOpacity>
+              <View style={styles.modalActions}>
+                <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
+                  <Text style={styles.cancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.submitBtn}
+                  onPress={handleSubmit}
+                  disabled={submitting}
+                >
+                  <Text style={styles.submitText}>{submitting ? 'Submitting...' : 'Submit'}</Text>
+                </TouchableOpacity>
+              </View>
             </ScrollView>
           </View>
         </View>
@@ -207,68 +160,29 @@ export default function StudentRating() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f3f4f6', padding: 16 },
-  loader: { flex: 1, marginTop: 40 },
-  pageTitle: { fontSize: 18, fontWeight: '800', color: '#111827', marginBottom: 4 },
-  pageSub: { fontSize: 13, color: '#6b7280', marginBottom: 16 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  title: { fontSize: 20, fontWeight: '700', color: '#271111', marginBottom: 12 },
+  card: { backgroundColor: '#fff', borderRadius: 10, padding: 14, marginBottom: 10, elevation: 2 },
+  course: { fontSize: 15, fontWeight: '600', color: '#fb1414' },
+  lecturer: { fontSize: 13, color: '#6b7280', marginTop: 4 },
+  rateBtn: {
+    marginTop: 10, backgroundColor: '#1a1a1c',
+    paddingVertical: 8, borderRadius: 6, alignItems: 'center',
+  },
+  rateBtnDisabled: { backgroundColor: '#9ca3af' },
+  rateBtnText: { color: '#fff', fontWeight: '600' },
   empty: { textAlign: 'center', color: '#9ca3af', marginTop: 40 },
-
-  card: {
-    backgroundColor: '#fff', borderRadius: 12,
-    padding: 14, marginBottom: 10, elevation: 1,
-    flexDirection: 'row', alignItems: 'center',
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
+  modalContent: { backgroundColor: '#fff', borderRadius: 12, padding: 20 },
+  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 12 },
+  starRow: { flexDirection: 'row', justifyContent: 'center', marginBottom: 12 },
+  input: {
+    borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8,
+    padding: 10, minHeight: 60, textAlignVertical: 'top', marginBottom: 16,
   },
-  cardRated: { opacity: 0.7 },
-  avatarCircle: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: '#1a56db', justifyContent: 'center', alignItems: 'center',
-    marginRight: 12,
-  },
-  avatarText: { color: '#fff', fontWeight: '800', fontSize: 18 },
-  cardInfo: { flex: 1 },
-  lecturerName: { fontSize: 14, fontWeight: '700', color: '#111827' },
-  lecturerEmail: { fontSize: 12, color: '#6b7280', marginTop: 2, marginBottom: 4 },
-  badge: {
-    backgroundColor: '#eff6ff', borderRadius: 6,
-    paddingHorizontal: 8, paddingVertical: 2, alignSelf: 'flex-start',
-  },
-  badgeText: { fontSize: 11, color: '#1a56db', fontWeight: '700' },
-  ratedBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  ratedText: { fontSize: 12, color: '#10b981', fontWeight: '600' },
-
-  modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end',
-  },
-  modalCard: {
-    backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    padding: 20, maxHeight: '85%',
-  },
-  modalHeader: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', marginBottom: 16,
-  },
-  modalTitle: { fontSize: 17, fontWeight: '800', color: '#111827' },
-  modalLecturer: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 2 },
-  modalEmail: { fontSize: 12, color: '#6b7280', marginBottom: 10 },
-  modalCourseBadge: {
-    backgroundColor: '#eff6ff', borderRadius: 8,
-    paddingHorizontal: 10, paddingVertical: 4,
-    alignSelf: 'flex-start', marginBottom: 20,
-  },
-  modalCourseText: { fontSize: 13, color: '#1a56db', fontWeight: '700' },
-  starLabel: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 10 },
-  starsRow: { flexDirection: 'row', justifyContent: 'center', marginBottom: 8 },
-  starIcon: { marginHorizontal: 4 },
-  starValue: { textAlign: 'center', fontSize: 13, color: '#6b7280', marginBottom: 20 },
-  commentLabel: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 8 },
-  commentInput: {
-    borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10,
-    padding: 12, fontSize: 14, backgroundColor: '#f9fafb',
-    marginBottom: 20, minHeight: 100,
-  },
-  submitBtn: {
-    backgroundColor: '#1a56db', borderRadius: 10,
-    padding: 14, alignItems: 'center', marginBottom: 10,
-  },
-  submitBtnDisabled: { backgroundColor: '#93c5fd' },
-  submitBtnText: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  modalActions: { flexDirection: 'row', justifyContent: 'space-between' },
+  cancelBtn: { padding: 10 },
+  cancelText: { color: '#6b7280' },
+  submitBtn: { backgroundColor: '#3a3c40', padding: 10, borderRadius: 8 },
+  submitText: { color: '#fff', fontWeight: '700' },
 });

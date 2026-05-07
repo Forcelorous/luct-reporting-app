@@ -1,14 +1,17 @@
-import admin from 'firebase-admin';
-import { createRequire } from 'module';
+const admin = require('firebase-admin');
+const path = require('path');
 
-const require = createRequire(import.meta.url);
+// ✅ Use absolute path to ensure the key is found correctly
+const serviceAccount = require(path.join(__dirname, 'serviceAccountKey.json'));
 
-const serviceAccount = require('./serviceAccountKey.json');
-
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
+}
 
 const db = admin.firestore();
+const auth = admin.auth();
 
-export { admin, db };
+// ✅ Export using CommonJS (matches your index.js require)
+module.exports = { admin, db, auth };

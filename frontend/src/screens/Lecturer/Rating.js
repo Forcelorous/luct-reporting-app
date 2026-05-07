@@ -1,24 +1,41 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
-import { firestore } from '../../services/FirebaseConfig';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, FlatList, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
+import { getRatingsByLecturer } from '../../services/api';
+import { auth } from '../../services/FirebaseConfig';
+import { onAuthStateChanged } from 'firebase/auth';
 
 export default function LecturerRating() {
   const [ratings, setRatings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
-    const unsubscribe = firestore
-      .collection('ratings')
-      .onSnapshot(
-        snapshot => {
-          const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          setRatings(data);
-          setLoading(false);
-        },
-        err => { console.error(err); setLoading(false); }
-      );
+    const unsubscribe = onAuthStateChanged(auth, u => setUser(u));
     return unsubscribe;
   }, []);
+
+  const fetchRatings = useCallback(async () => {
+    if (!user?.email) return;
+    try {
+      const data = await getRatingsByLecturer(user.email);
+      setRatings(Array.isArray(data) ? data : (data.ratings || []));
+    } catch (err) {
+      console.error('Failed to fetch ratings:', err.message);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (user) fetchRatings();
+  }, [user, fetchRatings]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchRatings();
+  }, [fetchRatings]);
 
   const avg = ratings.length > 0
     ? (ratings.reduce((sum, r) => sum + (Number(r.rating) || 0), 0) / ratings.length).toFixed(1)
@@ -26,7 +43,7 @@ export default function LecturerRating() {
 
   const stars = (n) => '★'.repeat(Math.round(n)) + '☆'.repeat(5 - Math.round(n));
 
-  if (loading) return (
+  if (!user || loading) return (
     <View style={styles.center}>
       <ActivityIndicator size="large" color="#00ff33" />
     </View>
@@ -45,7 +62,8 @@ export default function LecturerRating() {
       ) : (
         <FlatList
           data={ratings}
-          keyExtractor={item => item.id}
+          keyExtractor={(item, index) => item.id || index.toString()}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           renderItem={({ item }) => (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
@@ -53,7 +71,12 @@ export default function LecturerRating() {
                 <Text style={styles.ratingNum}>{item.rating}/5</Text>
               </View>
               {item.comment ? <Text style={styles.comment}>"{item.comment}"</Text> : null}
-              <Text style={styles.course}>{item.courseName || 'General'}</Text>
+              <Text style={styles.course}>{item.courseCode || item.courseName || 'General'}</Text>
+              {item.createdAt ? (
+                <Text style={styles.date}>
+                  {new Date(item.createdAt?.seconds ? item.createdAt.seconds * 1000 : item.createdAt).toDateString()}
+                </Text>
+              ) : null}
             </View>
           )}
         />
@@ -66,21 +89,16 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: '#f3f4f6' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   title: { fontSize: 22, fontWeight: '800', color: '#111827', marginBottom: 16 },
-  avgCard: {
-    backgroundColor: '#ff0202', borderRadius: 16, padding: 24,
-    alignItems: 'center', marginBottom: 20,
-  },
+  avgCard: { backgroundColor: '#ff0202', borderRadius: 16, padding: 24, alignItems: 'center', marginBottom: 20 },
   avgNum: { fontSize: 48, fontWeight: '900', color: '#fff' },
   avgStars: { fontSize: 24, color: '#fbbf24', marginVertical: 4 },
   avgLabel: { fontSize: 13, color: '#bfdbfe' },
   empty: { color: '#9ca3af', textAlign: 'center', marginTop: 40 },
-  card: {
-    backgroundColor: '#fff', borderRadius: 12, padding: 14,
-    marginBottom: 10, elevation: 2,
-  },
+  card: { backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 10, elevation: 2 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
   stars: { fontSize: 18, color: '#fbbf24' },
   ratingNum: { fontSize: 14, fontWeight: '700', color: '#374151' },
   comment: { fontSize: 13, color: '#6b7280', fontStyle: 'italic', marginBottom: 6 },
   course: { fontSize: 12, color: '#9ca3af' },
+  date: { fontSize: 11, color: '#9ca3af', marginTop: 4 },
 });
