@@ -49,18 +49,15 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/ratings', ratingsRoutes);
 app.use('/api/courses', coursesRoutes);
 
-// 404 handler
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-// Global error handler
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// ✅ Bind to 0.0.0.0 so devices on the same network can reach the server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ LUCT Backend running on http://localhost:${PORT}`);
   console.log(`✅ Network access: http://10.91.167.187:${PORT}`);

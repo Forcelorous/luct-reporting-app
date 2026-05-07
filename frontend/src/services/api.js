@@ -1,17 +1,13 @@
 import { auth } from './FirebaseConfig';
 
-// ✅ Your PC's local WiFi IP — update this if IP changes (run ipconfig to check)
-const BASE_URL = 'http://10.203.157.187:5000/api';
+const BASE_URL = 'http://10.11.3.246:5000/api';
 
-
-// ✅ Get a fresh Firebase token (true = force refresh if expired)
 const getToken = async () => {
   const user = auth.currentUser;
   if (!user) throw new Error('Not authenticated');
   return await user.getIdToken(true);
 };
 
-// ✅ Safe JSON parser — catches HTML error pages or server crashes
 const parseResponse = async (res) => {
   const contentType = res.headers.get('content-type') || '';
   if (!contentType.includes('application/json')) {
@@ -23,7 +19,6 @@ const parseResponse = async (res) => {
   return data;
 };
 
-// ✅ Authenticated fetch — attaches Bearer token
 const apiFetch = async (endpoint, options = {}) => {
   const token = await getToken();
   const res = await fetch(`${BASE_URL}${endpoint}`, {
@@ -37,7 +32,6 @@ const apiFetch = async (endpoint, options = {}) => {
   return parseResponse(res);
 };
 
-// ✅ Public fetch — no token, used for /courses during registration
 export const publicFetch = async (endpoint, options = {}) => {
   const res = await fetch(`${BASE_URL}${endpoint}`, {
     ...options,
