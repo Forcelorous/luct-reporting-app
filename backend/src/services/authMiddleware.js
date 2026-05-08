@@ -12,10 +12,10 @@ const verifyToken = async (req, res, next) => {
 
     console.log('Received token length:', token?.length);
 
-    // ✅ Verify the Firebase ID token
+    // Verify the Firebase ID token
     const decoded = await auth.verifyIdToken(token);
 
-    // ✅ Fetch role from Firestore since Firebase tokens don't carry custom role by default
+    // Fetch role from Firestore 
     const userDoc = await db.collection('users').doc(decoded.uid).get();
 
     if (!userDoc.exists) {
@@ -24,7 +24,6 @@ const verifyToken = async (req, res, next) => {
 
     const userData = userDoc.data();
 
-    // ✅ Attach decoded token + Firestore role to req.user
     req.user = {
       ...decoded,
       role: userData?.role || null,
@@ -36,7 +35,6 @@ const verifyToken = async (req, res, next) => {
 
     next();
   } catch (error) {
-    // ✅ Log full error code + message to diagnose exact failure
     console.error('Token verification error:', error.code, error.message);
     return res.status(401).json({ error: 'Unauthorized: Invalid token' });
   }
@@ -47,7 +45,7 @@ const requireRole = (...roles) => (req, res, next) => {
     return res.status(401).json({ error: 'Unauthorized: Not authenticated' });
   }
 
-  // ✅ Case-insensitive role check
+  //Case-insensitive role check
   const userRole = req.user.role?.toLowerCase();
   const allowedRoles = roles.map(r => r.toLowerCase());
 

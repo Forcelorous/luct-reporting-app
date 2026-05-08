@@ -65,7 +65,6 @@ const submitRating = async (req, res) => {
       rating, comment, studentEmail,
     } = req.body;
 
-    // Prevent duplicate rating
     const existing = await db.collection('ratings')
       .where('studentEmail', '==', studentEmail)
       .where('lecturerEmail', '==', lecturerEmail)

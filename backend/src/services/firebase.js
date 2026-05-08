@@ -1,7 +1,6 @@
 const admin = require('firebase-admin');
 const path = require('path');
 
-// ✅ Use absolute path to ensure the key is found correctly
 const serviceAccount = require(path.join(__dirname, 'serviceAccountKey.json'));
 
 if (!admin.apps.length) {
@@ -13,5 +12,4 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 const auth = admin.auth();
 
-// ✅ Export using CommonJS (matches your index.js require)
 module.exports = { admin, db, auth };

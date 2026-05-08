@@ -1,6 +1,6 @@
 const { db } = require('../services/firebase');
 
-// get all courses — joins with assignments so assignedLecturer is included
+// get all courses 
 const getAllCourses = async (req, res) => {
   try {
     const [coursesSnap, assignmentsSnap] = await Promise.all([
@@ -11,7 +11,6 @@ const getAllCourses = async (req, res) => {
     const assignments = {};
     assignmentsSnap.docs.forEach(doc => {
       const data = doc.data();
-      // key by courseCode so we can look up quickly
       assignments[data.courseCode] = {
         lecturerName: data.lecturerName,
         lecturerEmail: data.lecturerEmail,
@@ -25,7 +24,6 @@ const getAllCourses = async (req, res) => {
       return {
         id: doc.id,
         ...data,
-        // ✅ attach assignedLecturer so frontend filter works
         assignedLecturer: assigned ? {
           name: assigned.lecturerName,
           email: assigned.lecturerEmail,
@@ -40,7 +38,7 @@ const getAllCourses = async (req, res) => {
   }
 };
 
-// add a course (PL only)
+// add a course
 const addCourse = async (req, res) => {
   try {
     const { courseCode, courseName, stream, faculty, totalStudents, scheduledTime, venue } = req.body;
@@ -61,7 +59,7 @@ const addCourse = async (req, res) => {
   }
 };
 
-// DELETE courses/:id
+// DELETE courses
 const deleteCourse = async (req, res) => {
   try {
     await db.collection('courses').doc(req.params.id).delete();
@@ -82,7 +80,7 @@ const getAllAssignments = async (req, res) => {
   }
 };
 
-// GET /assignments/lecturer/:email
+// GET /assignments/lecturer
 const getAssignmentsByLecturer = async (req, res) => {
   try {
     const snapshot = await db.collection('assignments')
@@ -99,7 +97,6 @@ const assignLecturer = async (req, res) => {
   try {
     const { lecturerEmail, lecturerName, courseCode, lecturerUid } = req.body;
 
-    // Check duplicate
     const existing = await db.collection('assignments')
       .where('lecturerEmail', '==', lecturerEmail)
       .where('courseCode', '==', courseCode)

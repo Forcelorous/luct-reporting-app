@@ -60,7 +60,7 @@ export default function Login({ navigation }) {
         >
           <View style={styles.logoSection}>
             <Image
-              source={require('../../../assets/limkoicon.jpg')}
+              source={require('../../../assets/icon.jpg')}
               style={styles.logo}
               resizeMode="cover"
             />

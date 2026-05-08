@@ -1,6 +1,5 @@
 const { db } = require('../services/firebase');
 
-// get all sessions
 const getAllSessions = async (req, res) => {
   try {
     const snapshot = await db.collection('attendanceSessions')
@@ -13,7 +12,6 @@ const getAllSessions = async (req, res) => {
   }
 };
 
-// get open sessions
 const getOpenSessions = async (req, res) => {
   try {
     const snapshot = await db.collection('attendanceSessions')
@@ -26,7 +24,6 @@ const getOpenSessions = async (req, res) => {
   }
 };
 
-// GET /attendance/sessions/lecturer/:email
 const getSessionsByLecturer = async (req, res) => {
   try {
     const snapshot = await db.collection('attendanceSessions')
@@ -41,7 +38,6 @@ const getSessionsByLecturer = async (req, res) => {
   }
 };
 
-// get student attendance records
 const getStudentAttendance = async (req, res) => {
   try {
     const snapshot = await db.collection('studentAttendance')
@@ -56,7 +52,6 @@ const getStudentAttendance = async (req, res) => {
   }
 };
 
-// get check-ins for a session
 const getSessionCheckIns = async (req, res) => {
   try {
     const snapshot = await db.collection('studentAttendance')
@@ -69,12 +64,10 @@ const getSessionCheckIns = async (req, res) => {
   }
 };
 
-// open a new session
 const openSession = async (req, res) => {
   try {
     const { courseCode, lecturerEmail, lecturerName, date, venue } = req.body;
 
-    // ✅ Validate required fields
     if (!courseCode || !lecturerEmail || !lecturerName || !date) {
       return res.status(400).json({ error: 'Missing required fields: courseCode, lecturerEmail, lecturerName, date' });
     }
@@ -94,22 +87,18 @@ const openSession = async (req, res) => {
   }
 };
 
-// close a session
 const closeSession = async (req, res) => {
   try {
     const { id } = req.params;
     const { presentCount, absentCount, totalStudents } = req.body;
 
-    // ✅ Debug — remove once confirmed working
     console.log('closeSession called — ID:', id);
     console.log('closeSession body:', req.body);
 
-    // ✅ Validate session ID
     if (!id) {
       return res.status(400).json({ error: 'Missing session ID' });
     }
 
-    // ✅ Check the session actually exists before updating
     const sessionRef = db.collection('attendanceSessions').doc(id);
     const sessionSnap = await sessionRef.get();
 
@@ -118,12 +107,10 @@ const closeSession = async (req, res) => {
       return res.status(404).json({ error: 'Session not found' });
     }
 
-    // ✅ Check it isn't already closed
     if (!sessionSnap.data().isOpen) {
       return res.status(409).json({ error: 'Session is already closed' });
     }
 
-    // ✅ Safe defaults so Firestore update never gets undefined values
     await sessionRef.update({
       isOpen: false,
       presentCount: presentCount ?? 0,
@@ -139,7 +126,6 @@ const closeSession = async (req, res) => {
   }
 };
 
-// student signs in
 const studentCheckIn = async (req, res) => {
   try {
     const {
@@ -147,12 +133,10 @@ const studentCheckIn = async (req, res) => {
       courseCode, lecturerEmail, date, venue,
     } = req.body;
 
-    // ✅ Validate required fields
     if (!sessionId || !studentId || !studentEmail) {
       return res.status(400).json({ error: 'Missing required fields: sessionId, studentId, studentEmail' });
     }
 
-    // ✅ Confirm session exists and is still open
     const sessionSnap = await db.collection('attendanceSessions').doc(sessionId).get();
     if (!sessionSnap.exists) {
       return res.status(404).json({ error: 'Session not found' });
@@ -161,7 +145,6 @@ const studentCheckIn = async (req, res) => {
       return res.status(409).json({ error: 'Session is already closed' });
     }
 
-    // Prevent duplicate check-in
     const existing = await db.collection('studentAttendance')
       .where('sessionId', '==', sessionId)
       .where('studentId', '==', studentId)
