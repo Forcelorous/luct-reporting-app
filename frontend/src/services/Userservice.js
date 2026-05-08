@@ -42,7 +42,6 @@ export const getUserById = async (id) => {
   }
 };
 
-// ✅ Get lecturers assigned to a specific class via courses
 export const getLecturersByClass = async (className) => {
   try {
     const courses = await apiGetAllCourses();

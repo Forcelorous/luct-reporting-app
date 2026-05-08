@@ -1,6 +1,3 @@
-// src/services/reportService.js
-// ✅ All calls go through backend API — no direct Firebase
-
 import {
   apiGetAllReports,
   apiGetReportsByLecturer,

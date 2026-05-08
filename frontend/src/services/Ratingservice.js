@@ -1,6 +1,3 @@
-// src/services/ratingService.js
-// ✅ All calls go through backend API — no direct Firebase
-
 import {
   apiGetAllRatings,
   apiGetRatingsByLecturer,

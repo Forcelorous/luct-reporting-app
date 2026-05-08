@@ -1,6 +1,6 @@
 import { auth } from './FirebaseConfig';
 
-const BASE_URL = 'http://10.11.3.246:5000/api';
+const BASE_URL = 'https://luct-reporting-app-f67n.onrender.com/api';
 
 const getToken = async () => {
   const user = auth.currentUser;
@@ -75,7 +75,7 @@ export const submitRating = (data) => apiFetch('/ratings', { method: 'POST', bod
 
 // COURSES
 export const getAllCourses = () => apiFetch('/courses');
-export const getCourses = () => publicFetch('/courses'); // ✅ public — safe during registration
+export const getCourses = () => publicFetch('/courses'); 
 export const addCourse = (data) => apiFetch('/courses', { method: 'POST', body: JSON.stringify(data) });
 export const deleteCourse = (id) => apiFetch(`/courses/${id}`, { method: 'DELETE' });
 

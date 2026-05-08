@@ -1,11 +1,7 @@
-// src/services/apiService.js
-// ✅ All frontend API calls go through this file — no direct Firebase calls
-
 import { getAuth } from 'firebase/auth';
 
-const API_URL = "https://headfirst-reply-slightly.ngrok-free.dev";
+const API_URL = "https://luct-reporting-app-f67n.onrender.com";
 
-// ✅ Get auth token from current user
 const getToken = async () => {
   const auth = getAuth();
   const user = auth.currentUser;
@@ -13,7 +9,6 @@ const getToken = async () => {
   return await user.getIdToken();
 };
 
-// ✅ Generic request helper
 const request = async (method, endpoint, body = null) => {
   const token = await getToken();
   const options = {
